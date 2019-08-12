@@ -2,6 +2,7 @@
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <geometry_msgs/Point32.h>
+#include <std_msgs/Bool.h>
 
 #include <tf/transform_listener.h>
 
@@ -22,12 +23,15 @@ class LownCostmap
         ros::NodeHandle nh_;
         ros::Publisher cloud_pub_;
         ros::Subscriber cloud_sub_;
+        ros::Subscriber stop_sub_;
         tf::TransformListener tf_listener_;
 
         void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msgs);
+        void stopCallback(const std_msgs::BoolConstPtr& msg);
         void publishcloud();
 
         costmap_2d::Costmap2D costmap_;
+        int stop_;
 };
 
 
@@ -40,6 +44,9 @@ LownCostmap::LownCostmap()
    
     cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud>("/filtered_cloud",1, false);
     cloud_sub_ = nh_.subscribe("velodyne_points", 1, &LownCostmap::cloudCallback, this);
+    stop_sub_ = nh_.subscribe("lown_costmap/stop", 1, &LownCostmap::stopCallback, this);
+
+    stop_ = 1;
 
 }
 
@@ -53,23 +60,47 @@ void LownCostmap::cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msgs)
     double robot_x,robot_y;
     double new_origin_x,new_origin_y;
 
-    pcl::fromROSMsg (*msgs, pcl_cloud);
 
-    pcl::PassThrough<pcl::PointXYZI> pass;
-    pass.setInputCloud (pcl_cloud.makeShared());
-    pass.setFilterFieldName ("x");
-    pass.setFilterLimits (0, 3);
-    pass.filter (pcl_cloud);
+    if (!stop_){
+        pcl::fromROSMsg (*msgs, pcl_cloud);
 
-    pass.setInputCloud (pcl_cloud.makeShared());
-    pass.setFilterFieldName ("y");
-    pass.setFilterLimits (-3, 3);
-    pass.filter (pcl_cloud);
+        pcl::PassThrough<pcl::PointXYZI> pass;
+        pass.setInputCloud (pcl_cloud.makeShared());
+        pass.setFilterFieldName ("x");
+        pass.setFilterLimits (0, 3);
+        pass.filter (pcl_cloud);
 
-    sensor_msgs::PointCloud2 cloud;
+        pass.setInputCloud (pcl_cloud.makeShared());
+        pass.setFilterFieldName ("y");
+        pass.setFilterLimits (-3, 3);
+        pass.filter (pcl_cloud);
 
-    pcl::toROSMsg (pcl_cloud, cloud);
+        sensor_msgs::PointCloud2 cloud;
 
+        pcl::toROSMsg (pcl_cloud, cloud);
+
+        tf::StampedTransform trans;
+        sensor_msgs::PointCloud2 trans_cloud;
+        pcl_ros::transformPointCloud("odom", trans, cloud, trans_cloud);
+
+        pcl::fromROSMsg (trans_cloud, pcl_cloud);
+
+        pass.setInputCloud (pcl_cloud.makeShared());
+        pass.setFilterFieldName ("intensity");
+        pass.setFilterLimits (0, 1);
+        pass.filter (pcl_cloud);
+
+        unsigned int mx,my;
+        double wx,wy;
+        for (int i=0;i<pcl_cloud.width;i++){
+            wx = pcl_cloud.points[i].x;
+            wy = pcl_cloud.points[i].y;
+            if(costmap_.worldToMap(wx, wy, mx, my))
+                costmap_.setCost(mx, my, 1);
+        }
+    }
+
+    
     try
     {
         tf::StampedTransform trans;
@@ -85,33 +116,20 @@ void LownCostmap::cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msgs)
             ROS_WARN("%s", e.what());
     }
 
-    tf::StampedTransform trans;
-    sensor_msgs::PointCloud2 trans_cloud;
-    pcl_ros::transformPointCloud("odom", trans, cloud, trans_cloud);
-
-    pcl::fromROSMsg (trans_cloud, pcl_cloud);
-
-    pass.setInputCloud (pcl_cloud.makeShared());
-    pass.setFilterFieldName ("intensity");
-    pass.setFilterLimits (0, 1);
-    pass.filter (pcl_cloud);
-
-    unsigned int mx,my;
-    double wx,wy;
-    for (int i=0;i<pcl_cloud.width;i++){
-        wx = pcl_cloud.points[i].x;
-        wy = pcl_cloud.points[i].y;
-        if(costmap_.worldToMap(wx, wy, mx, my))
-            costmap_.setCost(mx, my, 1);
-    }
-    
-
     new_origin_x = robot_x - costmap_.getSizeInMetersX() / 2;
     new_origin_y = robot_y - costmap_.getSizeInMetersY() / 2;
     costmap_.updateOrigin(new_origin_x, new_origin_y);
 
     publishcloud();
 }
+
+
+void LownCostmap::stopCallback(const std_msgs::BoolConstPtr& msg)
+{
+    stop_ = msg->data;
+    std::cout << "stop_ = " << stop_ << std::endl;
+}
+
 
 void LownCostmap::publishcloud()
 {
