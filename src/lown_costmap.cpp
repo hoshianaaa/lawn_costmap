@@ -102,11 +102,11 @@ void LownCostmap::cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msgs)
         pass.setFilterLimits (45, 60);
         pass.filter (pcl_cloud);
 
-        /////  pcl_cloud filter /////
+        /////  filter /////
         pcl::StatisticalOutlierRemoval<pcl::PointXYZI> sor;
         sor.setInputCloud (pcl_cloud.makeShared());
-        sor.setMeanK (50);
-        sor.setStddevMulThresh (1.0);
+        sor.setMeanK (5);
+        sor.setStddevMulThresh (0.1);
         sor.filter (pcl_cloud);
         
 
