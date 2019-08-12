@@ -76,25 +76,46 @@ void LownCostmap::cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msgs)
         pass.filter (pcl_cloud);
 
         sensor_msgs::PointCloud2 cloud;
+        cloud.header.frame_id = "velodyne";
+
+        
+        for(int i=0;i<pcl_cloud.width;i++){
+            if(i%200==0)
+            std::cout << "origin cloud x,y :" << pcl_cloud.points[i].x << ", " << pcl_cloud.points[i].y << std::endl;
+        }
 
         pcl::toROSMsg (pcl_cloud, cloud);
 
-        tf::StampedTransform trans;
-        sensor_msgs::PointCloud2 trans_cloud;
-        pcl_ros::transformPointCloud("odom", trans, cloud, trans_cloud);
+        sensor_msgs::PointCloud2 cloud_odom;
 
-        pcl::fromROSMsg (trans_cloud, pcl_cloud);
+         try
+        {
+            tf::StampedTransform trans;
+            tf_listener_.waitForTransform("odom", "velodyne", ros::Time(0), ros::Duration(0.5));
+            tf_listener_.lookupTransform("odom", "velodyne", ros::Time(0), trans);
+            pcl_ros::transformPointCloud("odom", trans, cloud, cloud_odom);
+        }
+        catch(tf::TransformException &e)
+        {
+                ROS_WARN("%s", e.what());
+        }
+
+
+        pcl::fromROSMsg (cloud_odom, pcl_cloud);
 
         pass.setInputCloud (pcl_cloud.makeShared());
         pass.setFilterFieldName ("intensity");
-        pass.setFilterLimits (0, 1);
+        pass.setFilterLimits (40, 60);
         pass.filter (pcl_cloud);
+
+        std::cout << "pcl_cloud size: " << pcl_cloud.width << std::endl;
 
         unsigned int mx,my;
         double wx,wy;
         for (int i=0;i<pcl_cloud.width;i++){
             wx = pcl_cloud.points[i].x;
             wy = pcl_cloud.points[i].y;
+            if(i%30==0)std::cout << "pcl point x,y = " << wx << ", " << wy << std::endl;
             if(costmap_.worldToMap(wx, wy, mx, my))
                 costmap_.setCost(mx, my, 1);
         }
@@ -118,6 +139,7 @@ void LownCostmap::cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msgs)
 
     new_origin_x = robot_x - costmap_.getSizeInMetersX() / 2;
     new_origin_y = robot_y - costmap_.getSizeInMetersY() / 2;
+    std::cout << "costmap x,y = " << new_origin_x << ", " << new_origin_y << std::endl;
     costmap_.updateOrigin(new_origin_x, new_origin_y);
 
     publishcloud();
