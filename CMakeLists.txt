@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(lown_costmap)
+project(lawn_costmap)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
@@ -17,6 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
   sensor_msgs
+  std_msgs
   tf
 )
 
@@ -204,5 +205,7 @@ include_directories(
 
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
-add_executable(lown_costmap src/lown_costmap.cpp)
-target_link_libraries(lown_costmap  ${catkin_LIBRARIES})
+add_executable(lawn_costmap src/lawn_costmap.cpp)
+target_link_libraries(lawn_costmap  ${catkin_LIBRARIES})
+add_executable(look_data src/look_data.cpp)
+target_link_libraries(look_data  ${catkin_LIBRARIES})
