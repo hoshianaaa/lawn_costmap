@@ -42,12 +42,14 @@ void LookData::cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msgs)
 
     int sum = 0;
     int intensity;
+    double z;
     int freq = 30;
     std::cout << "data list" << std::endl;
     for(int i=0;i<pcl_cloud.width;i++){
         intensity = pcl_cloud.points[i].intensity;
+        z = pcl_cloud.points[i].z;
         sum = sum + intensity;
-        if(i%freq==0)std::cout << intensity << std::endl;
+        if(i%freq==0)std::cout << "i:"<< intensity << " z:" << z << std::endl;
     }
     std::cout << "ave:" << sum / pcl_cloud.width << std::endl;
     std::cout << "num:" << pcl_cloud.width << std::endl;

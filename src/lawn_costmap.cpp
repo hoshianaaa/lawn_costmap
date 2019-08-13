@@ -1,6 +1,7 @@
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/PointCloud2.h>
+#include <sensor_msgs/point_cloud_conversion.h>
 #include <geometry_msgs/Point32.h>
 #include <std_msgs/Bool.h>
 
@@ -15,6 +16,7 @@
 #include <costmap_2d/costmap_2d_publisher.h>
 
 
+
 class LawnCostmap
 {
     public:
@@ -24,15 +26,15 @@ class LawnCostmap
         ros::NodeHandle nh_;
         ros::Publisher cloud_pub_;
         ros::Subscriber cloud_sub_;
-        ros::Subscriber stop_sub_;
+        ros::Subscriber activate_sub_;
         tf::TransformListener tf_listener_;
 
         void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msgs);
-        void stopCallback(const std_msgs::BoolConstPtr& msg);
+        void activateCallback(const std_msgs::BoolConstPtr& msg);
         void publishcloud();
 
         costmap_2d::Costmap2D costmap_;
-        int stop_;
+        int activate_;
 };
 
 
@@ -43,11 +45,12 @@ LawnCostmap::LawnCostmap()
     costmap_.setDefaultValue(0);
     costmap_.resizeMap(40, 40, 0.1, 0, 0);
    
-    cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud>("/filtered_cloud",1, false);
+    cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("/filtered_cloud",1, false);
     cloud_sub_ = nh_.subscribe("velodyne_points", 1, &LawnCostmap::cloudCallback, this);
-    stop_sub_ = nh_.subscribe("lawn_costmap/stop", 1, &LawnCostmap::stopCallback, this);
+    activate_sub_ = nh_.subscribe("lawn_costmap/activate", 1, &LawnCostmap::activateCallback, this);
 
-    stop_ = 1;
+    //activate_ = 0;
+    activate_ = 1;
 
 }
 
@@ -57,11 +60,12 @@ void LawnCostmap::cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msgs)
     std::cout << "cloud callback" << std::endl;
 
     pcl::PointCloud<pcl::PointXYZI> pcl_cloud;
+    pcl::PointCloud<pcl::PointXYZI> remove_pcl_cloud;
 
     double robot_x,robot_y;
     double new_origin_x,new_origin_y;
 
-    if (!stop_){
+    if (activate_){
         pcl::fromROSMsg (*msgs, pcl_cloud);
 
         pcl::PassThrough<pcl::PointXYZI> pass;
@@ -73,6 +77,18 @@ void LawnCostmap::cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msgs)
         pass.setInputCloud (pcl_cloud.makeShared());
         pass.setFilterFieldName ("y");
         pass.setFilterLimits (-3, 3);
+        pass.filter (pcl_cloud);
+
+        //高さのあるものを除く
+        pass.setInputCloud (pcl_cloud.makeShared());
+        pass.setFilterFieldName ("z");
+        pass.setFilterLimits (-0.3, 0.3);
+        pass.filter (remove_pcl_cloud);
+
+        //-0.5~-0.45くらいが地面
+        pass.setInputCloud (pcl_cloud.makeShared());
+        pass.setFilterFieldName ("z");
+        pass.setFilterLimits (-0.6, -0.3);
         pass.filter (pcl_cloud);
 
         sensor_msgs::PointCloud2 cloud;
@@ -87,6 +103,7 @@ void LawnCostmap::cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msgs)
             tf::StampedTransform trans;
             tf_listener_.waitForTransform("odom", "velodyne", ros::Time(0), ros::Duration(0.5));
             tf_listener_.lookupTransform("odom", "velodyne", ros::Time(0), trans);
+            pcl_ros::transformPointCloud("odom", trans, cloud, cloud_odom);
             pcl_ros::transformPointCloud("odom", trans, cloud, cloud_odom);
         }
         catch(tf::TransformException &e)
@@ -117,8 +134,9 @@ void LawnCostmap::cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msgs)
         for (int i=0;i<pcl_cloud.width;i++){
             wx = pcl_cloud.points[i].x;
             wy = pcl_cloud.points[i].y;
-            if(costmap_.worldToMap(wx, wy, mx, my))
+            if(costmap_.worldToMap(wx, wy, mx, my)){
                 costmap_.setCost(mx, my, 1);
+            }
         }
     }
 
@@ -146,10 +164,10 @@ void LawnCostmap::cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msgs)
 }
 
 
-void LawnCostmap::stopCallback(const std_msgs::BoolConstPtr& msg)
+void LawnCostmap::activateCallback(const std_msgs::BoolConstPtr& msg)
 {
-    stop_ = msg->data;
-    std::cout << " stop_ = " << stop_ << std::endl;
+    activate_ = msg->data;
+    std::cout << " activate_ = " << activate_ << std::endl;
 }
 
 
@@ -157,8 +175,11 @@ void LawnCostmap::publishcloud()
 {
 
     double wx,wy;
-    sensor_msgs::PointCloud map_cloud;
+    sensor_msgs::PointCloud map_cloud_odom;
+    sensor_msgs::PointCloud2 map_cloud2_odom;
+    sensor_msgs::PointCloud2 map_cloud2_velodyne;
 
+    
     for(int i=0;i<costmap_.getSizeInCellsX();i++){
         for(int j=0;j<costmap_.getSizeInCellsY();j++){
             if(costmap_.getCost(i,j)){
@@ -166,16 +187,31 @@ void LawnCostmap::publishcloud()
                 costmap_.mapToWorld(i,j,wx,wy);
                 point.x = (float)wx;
                 point.y = (float)wy;
-                map_cloud.points.push_back(point);
+                map_cloud_odom.points.push_back(point);
             }
         }
     }
     
     std::cout << "publish cloud" << std::endl;
-    map_cloud.header.frame_id = "odom";
-    cloud_pub_.publish(map_cloud);
+    map_cloud_odom.header.frame_id = "odom";
+
+    sensor_msgs::convertPointCloudToPointCloud2 (map_cloud_odom, map_cloud2_odom);
+
+    try
+    {
+        tf::StampedTransform trans;
+        tf_listener_.waitForTransform("odom", "velodyne", ros::Time(0), ros::Duration(0.5));
+        tf_listener_.lookupTransform("velodyne", "odom", ros::Time(0), trans);
+        pcl_ros::transformPointCloud("velodyne", trans, map_cloud2_odom, map_cloud2_velodyne);
+    }
+    catch(tf::TransformException &e)
+    {
+        ROS_WARN("%s", e.what());
+    }
+
+    cloud_pub_.publish(map_cloud2_velodyne);
 }
-    
+
 int main(int argc, char **argv)
 {
     std::cout << "start node" << std::endl;
