@@ -3,7 +3,7 @@
 #include <sensor_msgs/PointCloud2.h>
 #include <sensor_msgs/point_cloud_conversion.h>
 #include <geometry_msgs/Point32.h>
-#include <std_msgs/Bool.h>
+#include <std_srvs/SetBool.h>
 
 #include <tf/transform_listener.h>
 
@@ -25,11 +25,17 @@ class LawnCostmap
         ros::NodeHandle nh_;
         ros::Publisher cloud_pub_;
         ros::Subscriber cloud_sub_;
-        ros::Subscriber activate_sub_;
+        ros::ServiceServer activate_switch_;
         tf::TransformListener tf_listener_;
 
         void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msgs);
-        void activateCallback(const std_msgs::BoolConstPtr& msg);
+        bool activate(std_srvs::SetBool::Request &req, std_srvs::SetBool::Response &res)
+        {
+            activate_ = req.data;
+            res.success = 1;
+            return 1;
+        }
+
         void publishcloud();
         void setRangeCost(costmap_2d::Costmap2D& costmap, int range, int mx, int my, int value);
 
@@ -48,10 +54,11 @@ LawnCostmap::LawnCostmap()
    
     cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("/filtered_cloud",1, false);
     cloud_sub_ = nh_.subscribe("velodyne_points", 1, &LawnCostmap::cloudCallback, this);
-    activate_sub_ = nh_.subscribe("lawn_costmap/activate", 1, &LawnCostmap::activateCallback, this);
+    activate_switch_ = nh_.advertiseService("lawn_costmap/activate", &LawnCostmap::activate, this);
 
-    //activate_ = 0;
-    activate_ = 1;
+
+    activate_ = 0;
+    //activate_ = 1;
     cost_th_ = 3;
 
 }
@@ -222,12 +229,6 @@ void LawnCostmap::cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msgs)
     publishcloud();
 }
 
-
-void LawnCostmap::activateCallback(const std_msgs::BoolConstPtr& msg)
-{
-    activate_ = msg->data;
-    std::cout << " activate_ = " << activate_ << std::endl;
-}
 
 void LawnCostmap::setRangeCost(costmap_2d::Costmap2D& costmap, int range, int mx, int my, int value){
 
