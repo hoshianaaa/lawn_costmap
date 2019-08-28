@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+
+<launch>
+  <node name="lawn_costmap" pkg="lawn_costmap" type="lawn_costmap" output="screen">
+    <param name="sensor_frame" value="hokuyo3d_link" />
+    <param name="topic_name" value="hokuyo3d/hokuyo_cloud2" />
+  </node>
+</launch>

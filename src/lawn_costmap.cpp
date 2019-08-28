@@ -27,6 +27,7 @@ class LawnCostmap
         ros::Subscriber cloud_sub_;
         ros::ServiceServer activate_switch_;
         tf::TransformListener tf_listener_;
+		std::string sensor_frame_, topic_name_;
 
         void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msgs);
         bool activate(std_srvs::SetBool::Request &req, std_srvs::SetBool::Response &res)
@@ -49,11 +50,18 @@ LawnCostmap::LawnCostmap()
 {
 
     std::cout << "start LawnCostmap" << std::endl;
+
+	ros::NodeHandle private_nh("~");
+	private_nh.param("sensor_frame", sensor_frame_, std::string("/velodyne"));
+	private_nh.param("topic_name", topic_name_, std::string("/velodyne"));
+	std::cout << "sensor_frame:" << sensor_frame_ << std::endl;
+	std::cout << "topic_name:" << topic_name_ << std::endl;
+
     total_costmap_.setDefaultValue(0);
     total_costmap_.resizeMap(40, 40, 0.1, 0, 0);
    
-    cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("/filtered_cloud",1, false);
-    cloud_sub_ = nh_.subscribe("velodyne_points", 1, &LawnCostmap::cloudCallback, this);
+    cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("/lawn_cloud",1, false);
+    cloud_sub_ = nh_.subscribe(topic_name_, 1, &LawnCostmap::cloudCallback, this);
     activate_switch_ = nh_.advertiseService("lawn_costmap/activate", &LawnCostmap::activate, this);
 
 
@@ -160,14 +168,14 @@ void LawnCostmap::cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msgs)
         sensor_msgs::PointCloud2 cloud;
         sensor_msgs::convertPointCloudToPointCloud2(input_cloud, cloud);
 
-        cloud.header.frame_id = "velodyne";
+        cloud.header.frame_id = sensor_frame_;
         sensor_msgs::PointCloud2 cloud_odom;
 
         try
         {
             tf::StampedTransform trans;
-            tf_listener_.waitForTransform("odom", "velodyne", ros::Time(0), ros::Duration(0.5));
-            tf_listener_.lookupTransform("odom", "velodyne", ros::Time(0), trans);
+            tf_listener_.waitForTransform("odom", sensor_frame_, ros::Time(0), ros::Duration(0.5));
+            tf_listener_.lookupTransform("odom", sensor_frame_, ros::Time(0), trans);
             pcl_ros::transformPointCloud("odom", trans, cloud, cloud_odom);
             pcl_ros::transformPointCloud("odom", trans, cloud, cloud_odom);
         }
@@ -289,9 +297,9 @@ void LawnCostmap::publishcloud()
     try
     {
         tf::StampedTransform trans;
-        tf_listener_.waitForTransform("odom", "velodyne", ros::Time(0), ros::Duration(0.5));
-        tf_listener_.lookupTransform("velodyne", "odom", ros::Time(0), trans);
-        pcl_ros::transformPointCloud("velodyne", trans, map_cloud2_odom, map_cloud2_velodyne);
+        tf_listener_.waitForTransform("odom", sensor_frame_, ros::Time(0), ros::Duration(0.5));
+        tf_listener_.lookupTransform(sensor_frame_, "odom", ros::Time(0), trans);
+        pcl_ros::transformPointCloud(sensor_frame_, trans, map_cloud2_odom, map_cloud2_velodyne);
     }
     catch(tf::TransformException &e)
     {
