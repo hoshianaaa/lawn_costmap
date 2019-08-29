@@ -53,7 +53,7 @@ LawnCostmap::LawnCostmap()
 
 	ros::NodeHandle private_nh("~");
 	private_nh.param("sensor_frame", sensor_frame_, std::string("/velodyne"));
-	private_nh.param("topic_name", topic_name_, std::string("/velodyne"));
+	private_nh.param("topic_name", topic_name_, std::string("velodyne_points"));
 	std::cout << "sensor_frame:" << sensor_frame_ << std::endl;
 	std::cout << "topic_name:" << topic_name_ << std::endl;
 

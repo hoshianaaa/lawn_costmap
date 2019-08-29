@@ -14,12 +14,16 @@ class LookData
         ros::Subscriber cloud_sub_;
         ros::Publisher cloud_pub_;
         void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msgs);
+		std::string topic_name_, sensor_frame_;
 };
 
 LookData::LookData()
 {
     std::cout << "start LookData" << std::endl;
-    cloud_sub_ = nh_.subscribe("velodyne_points", 1, &LookData::cloudCallback, this);
+	ros::NodeHandle private_nh("~");
+	private_nh.param("topic_name", topic_name_, std::string("velodyne_points"));
+	private_nh.param("sensor_frame", sensor_frame_, std::string("/velodyne"));
+    cloud_sub_ = nh_.subscribe(topic_name_, 1, &LookData::cloudCallback, this);
     cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("min_cloud",1, true);
 }
 
@@ -49,7 +53,7 @@ void LookData::cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msgs)
         intensity = pcl_cloud.points[i].intensity;
         z = pcl_cloud.points[i].z;
         sum = sum + intensity;
-        if(i%freq==0)std::cout << "i:"<< intensity << " z:" << z << std::endl;
+        if(i%freq==0)std::cout << intensity << std::endl;
     }
     std::cout << "ave:" << sum / pcl_cloud.width << std::endl;
     std::cout << "num:" << pcl_cloud.width << std::endl;
@@ -57,7 +61,7 @@ void LookData::cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msgs)
     sensor_msgs::PointCloud2 filtered_cloud;
 
     pcl::toROSMsg (pcl_cloud, filtered_cloud);
-    filtered_cloud.header.frame_id = "velodyne";
+    filtered_cloud.header.frame_id = sensor_frame_;
 
     std::cout << "pub cloud " << std::endl;
     cloud_pub_.publish(filtered_cloud);
