@@ -45,7 +45,7 @@ class LawnCostmap
 
         costmap_2d::Costmap2D total_costmap_;
         int activate_;
-        int cost_th_;
+        int cost_threshold_;
 };
 
 
@@ -67,6 +67,7 @@ LawnCostmap::LawnCostmap()
 	private_nh.param("sensor_range_x_max", sensor_range_x_max_, 2.0);
 	private_nh.param("sensor_range_y_min", sensor_range_y_min_, -2.0);
 	private_nh.param("sensor_range_y_max", sensor_range_y_max_, 2.0);
+	private_nh.param("cost_threshold", cost_threshold_, 3);
 
 	std::cout << "sensor_frame:" << sensor_frame_ << std::endl;
 	std::cout << "topic_name:" << topic_name_ << std::endl;
@@ -80,6 +81,7 @@ LawnCostmap::LawnCostmap()
 	std::cout << "sensor_range_x_max:" << sensor_range_x_max_ << std::endl;
 	std::cout << "sensor_range_y_min:" << sensor_range_y_min_ << std::endl;
 	std::cout << "sensor_range_y_max:" << sensor_range_y_max_ << std::endl;
+	std::cout << "cost_threshold:" << cost_threshold_ << std::endl;
 
     total_costmap_.setDefaultValue(0);
     total_costmap_.resizeMap(40, 40, 0.1, 0, 0);
@@ -91,7 +93,6 @@ LawnCostmap::LawnCostmap()
 
     activate_ = 0;
     //activate_ = 1;
-    cost_th_ = 3;
 
 }
 
@@ -245,7 +246,7 @@ void LawnCostmap::cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msgs)
             wy = pcl_cloud_odom.points[i].y;
             if(total_costmap_.worldToMap(wx, wy, mx, my)){
                 int c = total_costmap_.getCost(mx, my);
-                if(c < cost_th_)
+                if(c < cost_threshold_)
                     total_costmap_.setCost(mx, my, c+1);
             }
         }
@@ -316,7 +317,7 @@ void LawnCostmap::publishcloud()
     
     for(int i=0;i<total_costmap_.getSizeInCellsX();i++){
         for(int j=0;j<total_costmap_.getSizeInCellsY();j++){
-            if(total_costmap_.getCost(i,j) > cost_th_ - 1){
+            if(total_costmap_.getCost(i,j) > cost_threshold_ - 1){
                 geometry_msgs::Point32 point;
                 total_costmap_.mapToWorld(i,j,wx,wy);
                 point.x = (float)wx;

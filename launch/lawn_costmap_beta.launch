@@ -4,7 +4,7 @@
   <node name="lawn_costmap" pkg="lawn_costmap" type="lawn_costmap" output="screen">
     <param name="sensor_frame" value="hokuyo3d_link" />
     <param name="topic_name" value="hokuyo3d/hokuyo_cloud2" />
-    <param name="intensity_min" value="350" />
+    <param name="intensity_min" value="150" />
     <param name="intensity_max" value="420" />
     <param name="z_min" value="0.5" />
     <param name="z_max" value="0.7" />
@@ -14,5 +14,6 @@
     <param name="sensor_range_x_max" value="2.0" />
     <param name="sensor_range_y_min" value="-2.0" />
     <param name="sensor_range_y_max" value="2.0" />
+    <param name="cost_threshold" value="1" />
   </node>
 </launch>
