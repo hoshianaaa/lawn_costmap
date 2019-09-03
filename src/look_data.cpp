@@ -36,12 +36,12 @@ void LookData::cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msgs)
     pcl::PassThrough<pcl::PointXYZI> pass;
     pass.setInputCloud (pcl_cloud.makeShared());
     pass.setFilterFieldName ("x");
-    pass.setFilterLimits (1,3);
+    pass.setFilterLimits (1.8,2);
     pass.filter (pcl_cloud);
 
     pass.setInputCloud (pcl_cloud.makeShared());
     pass.setFilterFieldName ("y");
-    pass.setFilterLimits (-1,1);
+    pass.setFilterLimits (-2,2);
     pass.filter (pcl_cloud);
 
     int sum = 0;
@@ -49,11 +49,14 @@ void LookData::cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msgs)
     double z;
     int freq = 30;
     std::cout << "data list" << std::endl;
+
+	
     for(int i=0;i<pcl_cloud.width;i++){
         intensity = pcl_cloud.points[i].intensity;
         z = pcl_cloud.points[i].z;
         sum = sum + intensity;
-        if(i%freq==0)std::cout << intensity << std::endl;
+        //if(i%freq==0)std::cout << intensity << " " << z << std::endl;
+        std::cout << intensity << " " << z << std::endl;
     }
     std::cout << "ave:" << sum / pcl_cloud.width << std::endl;
     std::cout << "num:" << pcl_cloud.width << std::endl;

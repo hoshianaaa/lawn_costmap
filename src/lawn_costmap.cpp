@@ -28,6 +28,9 @@ class LawnCostmap
         ros::ServiceServer activate_switch_;
         tf::TransformListener tf_listener_;
 		std::string sensor_frame_, topic_name_;
+		int intensity_min_, intensity_max_;
+		double z_min_, z_max_, remove_z_min_, remove_z_max_;
+		double sensor_range_x_min_, sensor_range_x_max_, sensor_range_y_min_, sensor_range_y_max_;
 
         void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msgs);
         bool activate(std_srvs::SetBool::Request &req, std_srvs::SetBool::Response &res)
@@ -54,8 +57,29 @@ LawnCostmap::LawnCostmap()
 	ros::NodeHandle private_nh("~");
 	private_nh.param("sensor_frame", sensor_frame_, std::string("/velodyne"));
 	private_nh.param("topic_name", topic_name_, std::string("velodyne_points"));
+	private_nh.param("intensity_min", intensity_min_, 45);
+	private_nh.param("intensity_max", intensity_max_, 60);
+	private_nh.param("z_min", z_min_, -0.6);
+	private_nh.param("z_max", z_max_, -0.3);
+	private_nh.param("remove_z_min", remove_z_min_, -0.3);
+	private_nh.param("remove_z_max", remove_z_max_, 0.3);
+	private_nh.param("sensor_range_x_min", sensor_range_x_min_, 0.0);
+	private_nh.param("sensor_range_x_max", sensor_range_x_max_, 2.0);
+	private_nh.param("sensor_range_y_min", sensor_range_y_min_, -2.0);
+	private_nh.param("sensor_range_y_max", sensor_range_y_max_, 2.0);
+
 	std::cout << "sensor_frame:" << sensor_frame_ << std::endl;
 	std::cout << "topic_name:" << topic_name_ << std::endl;
+	std::cout << "intensity_min:" << intensity_min_ << std::endl;
+	std::cout << "intensity_max:" << intensity_max_ << std::endl;
+	std::cout << "z_min:" << z_min_ << std::endl;
+	std::cout << "z_max:" << z_max_ << std::endl;
+	std::cout << "remove_z_min:" << remove_z_min_ << std::endl;
+	std::cout << "remove_z_max:" << remove_z_max_ << std::endl;
+	std::cout << "sensor_range_x_min:" << sensor_range_x_min_ << std::endl;
+	std::cout << "sensor_range_x_max:" << sensor_range_x_max_ << std::endl;
+	std::cout << "sensor_range_y_min:" << sensor_range_y_min_ << std::endl;
+	std::cout << "sensor_range_y_max:" << sensor_range_y_max_ << std::endl;
 
     total_costmap_.setDefaultValue(0);
     total_costmap_.resizeMap(40, 40, 0.1, 0, 0);
@@ -84,36 +108,49 @@ void LawnCostmap::cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msgs)
     double wx, wy;
 
     if (activate_){
+
+ 
         pcl::fromROSMsg (*msgs, pcl_cloud);
 
         pcl::PassThrough<pcl::PointXYZI> pass;
         pass.setInputCloud (pcl_cloud.makeShared());
         pass.setFilterFieldName ("x");
-        pass.setFilterLimits (0, 3);
+        pass.setFilterLimits (sensor_range_x_min_, sensor_range_x_max_);
         pass.filter (pcl_cloud);
+
+        std::cout << "pcl_cloud size // x filter: " << pcl_cloud.width << std::endl;
 
         pass.setInputCloud (pcl_cloud.makeShared());
         pass.setFilterFieldName ("y");
-        pass.setFilterLimits (-3, 3);
+        pass.setFilterLimits (sensor_range_y_min_, sensor_range_y_max_);
         pass.filter (pcl_cloud);
 
-        //高さのあるものを除く
+        std::cout << "pcl_cloud size // y filter: " << pcl_cloud.width << std::endl;
+		// debug //
+		
+		for (int i=0;i<pcl_cloud.width;i++){
+			std::cout << pcl_cloud.points[i].z << std::endl;
+		}
+
+        //remove high object
         pass.setInputCloud (pcl_cloud.makeShared());
         pass.setFilterFieldName ("z");
-        pass.setFilterLimits (-0.3, 0.3);
+        pass.setFilterLimits (remove_z_min_, remove_z_max_);
         pass.filter (remove_pcl_cloud);
 
-        //-0.5~-0.45くらいが地面
+		
         pass.setInputCloud (pcl_cloud.makeShared());
         pass.setFilterFieldName ("z");
-        pass.setFilterLimits (-0.6, -0.3);
+        pass.setFilterLimits (z_min_, z_max_);
         pass.filter (pcl_cloud);
+	
 
-        std::cout << "pcl_cloud size: " << pcl_cloud.width << std::endl;
+        std::cout << "pcl_cloud size // z filter: " << pcl_cloud.width << std::endl;
 
+		// intensity filter //
         pass.setInputCloud (pcl_cloud.makeShared());
         pass.setFilterFieldName ("intensity");
-        pass.setFilterLimits (45, 60);
+        pass.setFilterLimits (intensity_min_, intensity_max_);
         pass.filter (pcl_cloud);
 
         std::cout << "pcl_cloud size: " << pcl_cloud.width << std::endl;
@@ -145,7 +182,7 @@ void LawnCostmap::cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msgs)
                int sy = costmap.getSizeInCellsY();
 
                costmap.setCost(mx, my, 0);
-               setRangeCost(costmap, 3, mx, my, 0);
+               setRangeCost(costmap, 3, mx, my, 0);//range cost set
 
           }
         }
@@ -190,7 +227,7 @@ void LawnCostmap::cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msgs)
         std::cout << "pcl_cloud_odom size: " << pcl_cloud_odom.width << std::endl;
         if(pcl_cloud_odom.width == 0)return;
 
-       /////  noise filter /////
+       	//  noise filter //
         pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor;
         sor.setInputCloud (pcl_cloud_odom.makeShared());
         sor.setMeanK (5);
