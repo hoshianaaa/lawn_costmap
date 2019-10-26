@@ -1,2 +1,2 @@
 # lawn_costmap  
-vlp16から芝生を認識しmove baseのlocal_costmapに送る
+3DLidarから芝生を認識しmove_baseのlocal_costmapに送る
