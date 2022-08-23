@@ -1,2 +1,3 @@
 # lawn_costmap  
-3DLidarから芝生を認識
+
+generate lawn costmap by the reflected intensity of 3d-lidar
